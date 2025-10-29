@@ -1,5 +1,6 @@
+import { useInventory } from '../../context/InventoryContext';
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Eye, CheckCircle, Clock, Truck, Package, Phone, MapPin, Calendar } from 'lucide-react';
+import { Search, Filter, Eye, CheckCircle, Clock, Truck, Mail, Package, Phone, MapPin, Calendar } from 'lucide-react';
 
 const OrderManagement = () => {
   const [orders, setOrders] = useState([]);
@@ -8,11 +9,22 @@ const OrderManagement = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedOrder, setSelectedOrder] = useState(null);
 
+  const { revertStock } = useInventory();
+
+  const revertMultipleItems = (items) => {
+    items.forEach(item => revertStock(item.product.id, item.quantity));
+  };
+
+
   useEffect(() => {
     // Load orders from localStorage
     const savedOrders = JSON.parse(localStorage.getItem('simple-dough-orders') || '[]');
-    setOrders(savedOrders);
-    setFilteredOrders(savedOrders);
+
+     // Sort by newest first
+  const sortedOrders = savedOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  
+  setOrders(sortedOrders);
+  setFilteredOrders(sortedOrders);
   }, []);
 
   useEffect(() => {
@@ -35,11 +47,24 @@ const OrderManagement = () => {
   }, [orders, searchTerm, statusFilter]);
 
   const updateOrderStatus = (orderId, newStatus) => {
-    const updatedOrders = orders.map(order =>
-      order.id === orderId ? { ...order, status: newStatus } : order
-    );
+    const updatedOrders = orders.map(order => {
+      if (order.id === orderId) {
+        // If cancelling, revert stock
+        if (newStatus === 'cancelled' && order.status !== 'cancelled') {
+          revertMultipleItems(order.items);
+        }
+        return { ...order, status: newStatus, cancelledBy: newStatus === 'cancelled' ? 'admin' : undefined };
+      }
+      return order;
+    });
+
     setOrders(updatedOrders);
     localStorage.setItem('simple-dough-orders', JSON.stringify(updatedOrders));
+
+    // Also update selectedOrder if modal is open
+    if (selectedOrder && selectedOrder.id === orderId) {
+      setSelectedOrder({ ...selectedOrder, status: newStatus });
+    }
   };
 
   const getStatusColor = (status) => {
@@ -129,11 +154,13 @@ const OrderManagement = () => {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-bold text-gray-900">
-                      Order #{order.id.slice(-8)}
+                      Order #{order.id}
                     </h3>
                     <span className={`px-3 py-1 rounded-full text-xs font-medium border flex items-center gap-1 ${getStatusColor(order.status)}`}>
                       {getStatusIcon(order.status)}
-                      {statusOptions.find(s => s.value === order.status)?.label || order.status}
+                      {order.status === 'cancelled' && order.cancelledBy === 'admin'
+                      ? 'Cancelled by SimpleDough'
+                      : statusOptions.find(s => s.value === order.status)?.label || order.status}
                     </span>
                   </div>
 
@@ -178,10 +205,14 @@ const OrderManagement = () => {
                   <select
                     value={order.status}
                     onChange={(e) => updateOrderStatus(order.id, e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={order.status === 'cancelled' || order.status === 'delivered'}
                   >
                     {statusOptions.map(option => (
-                      <option key={option.value} value={option.value}>
+                      <option
+                        key={option.value}
+                        value={option.value}
+                      >
                         {option.label}
                       </option>
                     ))}
@@ -211,7 +242,7 @@ const OrderManagement = () => {
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b">
               <h2 className="text-2xl font-bold text-gray-900">
-                Order #{selectedOrder.id.slice(-8)}
+                Order #{selectedOrder.id}
               </h2>
               <button
                 onClick={() => setSelectedOrder(null)}
@@ -227,7 +258,9 @@ const OrderManagement = () => {
               <div className="flex items-center gap-3">
                 <span className={`px-4 py-2 rounded-full text-sm font-medium border flex items-center gap-2 ${getStatusColor(selectedOrder.status)}`}>
                   {getStatusIcon(selectedOrder.status)}
-                  {statusOptions.find(s => s.value === selectedOrder.status)?.label || selectedOrder.status}
+                  {selectedOrder.status === 'cancelled' && selectedOrder.cancelledBy === 'admin'
+                  ? 'Cancelled by SimpleDough'
+                  : statusOptions.find(s => s.value === selectedOrder.status)?.label || selectedOrder.status}
                 </span>
                 <span className="text-sm text-gray-600">
                   Ordered on {new Date(selectedOrder.createdAt).toLocaleString()}
@@ -236,18 +269,30 @@ const OrderManagement = () => {
 
               {/* Customer Info */}
               <div className="bg-gray-50 rounded-lg p-4">
-                <h3 className="font-semibold text-gray-900 mb-3">Customer Information</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-gray-500" />
-                    <span>{selectedOrder.phone}</span>
-                  </div>
-                  {selectedOrder.deliveryMethod === 'delivery' && (
-                    <div className="flex items-start gap-2">
-                      <MapPin className="w-4 h-4 text-gray-500 mt-0.5" />
-                      <span>{selectedOrder.deliveryAddress}</span>
-                    </div>
-                  )}
+                <h3 className="font-semibold text-gray-900 mb-3">Customer Information</h3>  
+                  <div className="space-y-2 text-sm">
+                      {selectedOrder.customerName && (
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-700">Name:</span>
+                          <span>{selectedOrder.customerName}</span>
+                        </div>
+                      )}
+                      {selectedOrder.customerEmail && (
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-4 h-4 text-gray-500" />
+                          <span>{selectedOrder.customerEmail}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-gray-500" />
+                        <span>{selectedOrder.phone}</span>
+                      </div>
+                      {selectedOrder.deliveryMethod === 'delivery' && (
+                        <div className="flex items-start gap-2">
+                          <MapPin className="w-4 h-4 text-gray-500 mt-0.5" />
+                          <span>{selectedOrder.deliveryAddress}</span>
+                        </div>
+                      )}
                   <div className="flex items-center gap-2">
                     <Truck className="w-4 h-4 text-gray-500" />
                     <span>{selectedOrder.deliveryMethod === 'delivery' ? 'Delivery' : 'Pickup'}</span>

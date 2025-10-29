@@ -16,13 +16,16 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
+   const [success, setSuccess] = useState('');
   const { register } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
+    // Password validation checks
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -39,13 +42,15 @@ const Register = () => {
         email: formData.email,
         phone: formData.phone,
         address: formData.address,
+        password: formData.password,
         role: formData.role
       };
 
-      register(userData);
-      navigate(formData.role === 'admin' ? '/admin' : '/menu');
+  register(userData); 
+      setSuccess('Registered successfully!'); 
+      navigate(formData.role === 'admin' ? '/admin' : '/menu'); 
     } catch (err) {
-      setError('Registration failed. Please try again.');
+      setError(err.message || 'Registration failed. Please try again.');
     }
   };
 
@@ -60,7 +65,13 @@ const Register = () => {
           <p className="text-gray-600">Create your account and start ordering delicious donuts</p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-8">
+         <div className="bg-white rounded-xl shadow-lg p-8">
+          {/* ✅ Show success and error messages */}
+          {success && (
+            <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-lg mb-4">
+              {success}
+            </div>
+          )}
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
               {error}

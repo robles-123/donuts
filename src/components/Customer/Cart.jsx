@@ -3,10 +3,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Trash2, Plus, Minus, ShoppingBag, ArrowLeft } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
+import { useInventory } from '../../context/InventoryContext';
 import CheckoutModal from './CheckoutModal';
 
 const Cart = () => {
   const { cartItems, removeFromCart, updateQuantity, getTotalPrice, getTotalItems } = useCart();
+  const { inventory, getProductStock } = useInventory();
   const { user } = useAuth();
   const [showCheckout, setShowCheckout] = useState(false);
   const navigate = useNavigate();
@@ -31,6 +33,21 @@ const Cart = () => {
       </div>
     );
   }
+
+  const handleIncrement = (item) => {
+    const availableStock = getProductStock(item.product.id);
+    if (item.quantity < availableStock) {
+      updateQuantity(item.id, item.quantity + 1);
+    } else {
+      alert(`Cannot exceed available stock (${availableStock}) for ${item.product.name}`);
+    }
+  };
+
+  const handleDecrement = (item) => {
+    if (item.quantity > 1) {
+      updateQuantity(item.id, item.quantity - 1);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -93,14 +110,14 @@ const Cart = () => {
                 <div className="flex flex-col items-end gap-3">
                   <div className="flex items-center gap-2 border border-gray-300 rounded-lg">
                     <button
-                      onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                      onClick={() => handleDecrement(item)}
                       className="p-2 hover:bg-gray-100 rounded-l-lg"
                     >
                       <Minus className="w-4 h-4" />
                     </button>
                     <span className="px-3 py-2 font-semibold">{item.quantity}</span>
                     <button
-                      onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                      onClick={() => handleIncrement(item)}
                       className="p-2 hover:bg-gray-100 rounded-r-lg"
                     >
                       <Plus className="w-4 h-4" />

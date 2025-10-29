@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useAuth } from './AuthContext'; // 👈 make sure this import matches your structure
 
 const CartContext = createContext();
 
@@ -11,18 +12,30 @@ export const useCart = () => {
 };
 
 export const CartProvider = ({ children }) => {
+  const { user } = useAuth(); // ✅ Get the logged-in user
   const [cartItems, setCartItems] = useState([]);
 
+  // Helper: get key based on user
+  const getStorageKey = () => {
+    return user?.email
+      ? `simple-dough-cart-${user.email}`
+      : 'simple-dough-cart-guest';
+  };
+
+  // Load cart for current user
   useEffect(() => {
-    const savedCart = localStorage.getItem('simple-dough-cart');
+    const savedCart = localStorage.getItem(getStorageKey());
     if (savedCart) {
       setCartItems(JSON.parse(savedCart));
+    } else {
+      setCartItems([]); // reset if no saved cart
     }
-  }, []);
+  }, [user]); // 👈 when user changes (login/logout), reload their cart
 
+  // Save cart for that user
   useEffect(() => {
-    localStorage.setItem('simple-dough-cart', JSON.stringify(cartItems));
-  }, [cartItems]);
+    localStorage.setItem(getStorageKey(), JSON.stringify(cartItems));
+  }, [cartItems, user]);
 
   const addToCart = (product, customizations = {}) => {
     const cartItem = {
@@ -47,8 +60,8 @@ export const CartProvider = ({ children }) => {
       return;
     }
 
-    setCartItems(prev => prev.map(item => 
-      item.id === itemId 
+    setCartItems(prev => prev.map(item =>
+      item.id === itemId
         ? { ...item, quantity, totalPrice: item.product.price * quantity }
         : item
     ));

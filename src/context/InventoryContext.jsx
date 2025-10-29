@@ -16,17 +16,17 @@ export const InventoryProvider = ({ children }) => {
 
   useEffect(() => {
     const savedInventory = localStorage.getItem('simple-dough-inventory');
-    if (savedInventory) {
+    if (savedInventory && savedInventory !== "{}") {
       setInventory(JSON.parse(savedInventory));
-    } else {
-      // Initialize inventory with default daily limits
+    } else if (Object.keys(inventory).length === 0) {
       const initialInventory = {};
       PRODUCTS.forEach(product => {
+        const isPartySet = product.name.toLowerCase().includes('party');
+        const defaultLimit = isPartySet ? 10 : 20;
         initialInventory[product.id] = {
-          dailyLimit: 50, // Default daily limit
-          currentStock: 50,
-          soldToday: 0,
-          lowStockAlert: 10
+          dailyLimit: defaultLimit,
+          currentStock: defaultLimit,
+          soldToday: 0
         };
       });
       setInventory(initialInventory);
@@ -34,7 +34,9 @@ export const InventoryProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('simple-dough-inventory', JSON.stringify(inventory));
+    if (Object.keys(inventory).length > 0) {
+      localStorage.setItem('simple-dough-inventory', JSON.stringify(inventory));
+    }
   }, [inventory]);
 
   const updateDailyLimit = (productId, limit) => {
@@ -43,21 +45,40 @@ export const InventoryProvider = ({ children }) => {
       [productId]: {
         ...prev[productId],
         dailyLimit: limit,
-        currentStock: limit - (prev[productId]?.soldToday || 0)
+        currentStock: Math.max(0, limit - (prev[productId]?.soldToday || 0))
       }
     }));
   };
 
   const recordSale = (productId, quantity) => {
-    setInventory(prev => ({
+    setInventory(prev => {
+      const prevStock = prev[productId]?.currentStock || 0;
+      const prevSold = prev[productId]?.soldToday || 0;
+      return {
+        ...prev,
+        [productId]: {
+          ...prev[productId],
+          currentStock: Math.max(0, prevStock - quantity),
+          soldToday: prevSold + quantity
+        }
+      };
+    });
+  };
+
+  const revertStock = (productId, quantity) => {
+  setInventory(prev => {
+    const prevStock = prev[productId]?.currentStock || 0;
+    const prevSold = prev[productId]?.soldToday || 0;
+    return {
       ...prev,
       [productId]: {
         ...prev[productId],
-        currentStock: Math.max(0, prev[productId].currentStock - quantity),
-        soldToday: prev[productId].soldToday + quantity
+        currentStock: prevStock + quantity,
+        soldToday: Math.max(0, prevSold - quantity)
       }
-    }));
-  };
+    };
+  });
+};
 
   const resetDailyInventory = () => {
     setInventory(prev => {
@@ -83,15 +104,16 @@ export const InventoryProvider = ({ children }) => {
   };
 
   const getLowStockProducts = () => {
-    return Object.entries(inventory).filter(([productId, data]) => 
-      data.currentStock <= data.lowStockAlert
-    ).map(([productId]) => productId);
+    return Object.entries(inventory)
+      .filter(([_, data]) => (data.currentStock / data.dailyLimit) <= 0.2)
+      .map(([productId]) => productId);
   };
 
   const value = {
     inventory,
     updateDailyLimit,
     recordSale,
+    revertStock, 
     resetDailyInventory,
     getProductStock,
     isProductAvailable,

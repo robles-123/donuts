@@ -13,6 +13,7 @@ import Register from './components/Auth/Register';
 import Menu from './components/Customer/Menu';
 import Cart from './components/Customer/Cart';
 import Dashboard from './components/Admin/Dashboard';
+import OrderHistory from './components/Customer/OrderHistory';
 
 function App() {
   return (
@@ -44,6 +45,15 @@ function App() {
                     </ProtectedRoute>
                   } 
                 />
+                <Route 
+                  path="/orders" 
+                  element={
+                    <ProtectedRoute customerOnly>
+                      <OrderHistory />
+                    </ProtectedRoute>
+                  } 
+                />
+
 
                 {/* Admin Routes */}
                 <Route 

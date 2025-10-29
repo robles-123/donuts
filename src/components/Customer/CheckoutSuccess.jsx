@@ -36,9 +36,30 @@ const CheckoutSuccess = ({ order, onClose }) => {
     URL.revokeObjectURL(url);
   };
 
+  // ✅ Save order globally (in case CheckoutSuccess is mounted independently)
+  useEffect(() => {
+    if (order) {
+      // Global orders
+      const existingGlobalOrders = JSON.parse(localStorage.getItem('simple-dough-orders') || '[]');
+      if (!existingGlobalOrders.find(o => o.id === order.id)) {
+        existingGlobalOrders.push(order);
+        localStorage.setItem('simple-dough-orders', JSON.stringify(existingGlobalOrders));
+      }
+
+      // User-specific orders
+      if (order.customerEmail) {
+        const userKey = `simple-dough-orders-${order.customerEmail}`;
+        const existingUserOrders = JSON.parse(localStorage.getItem(userKey) || '[]');
+        if (!existingUserOrders.find(o => o.id === order.id)) {
+          existingUserOrders.push(order);
+          localStorage.setItem(userKey, JSON.stringify(existingUserOrders));
+        }
+      }
+    }
+  }, [order]);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      {/* Confetti Animation */}
       {showConfetti && (
         <div className="fixed inset-0 pointer-events-none">
           {[...Array(50)].map((_, i) => (

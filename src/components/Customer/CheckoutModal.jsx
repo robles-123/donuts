@@ -8,7 +8,7 @@ import CheckoutSuccess from './CheckoutSuccess';
 const CheckoutModal = ({ onClose }) => {
   const { cartItems, getTotalPrice, clearCart } = useCart();
   const { user } = useAuth();
-  const { recordSale } = useInventory();
+  const { recordSale, getProductStock } = useInventory();
   
   const [orderData, setOrderData] = useState({
     paymentMethod: 'gcash',
@@ -29,15 +29,37 @@ const CheckoutModal = ({ onClose }) => {
     setIsProcessing(true);
 
     try {
-      // Simulate processing delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // 1️⃣ Aggregate same product quantities
+      const aggregated = cartItems.reduce((acc, item) => {
+        const id = item.product.id;
+        if (!acc[id]) acc[id] = { ...item, quantity: 0 };
+        acc[id].quantity += item.quantity;
+        return acc;
+      }, {});
 
-      // Record sales in inventory
-      cartItems.forEach(item => {
-        recordSale(item.productId, item.quantity);
+      // 2️⃣ Validate stock levels across all aggregated items
+      const overStockItem = Object.values(aggregated).find(item => {
+        const stock = getProductStock(item.product.id);
+        return stock === undefined || item.quantity > stock;
       });
 
-      // Create order (in a real app, this would be saved to a database)
+      if (overStockItem) {
+        alert(
+          `Cannot place order. Item "${overStockItem.product.name}" exceeds available stock (${getProductStock(overStockItem.product.id) || 0} left).`
+        );
+        setIsProcessing(false);
+        return; // ✅ Stop everything, nothing happens
+      }
+
+      // 3️⃣ Simulate processing delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // 4️⃣ Record sales (safe now, we know stock is sufficient)
+      Object.values(aggregated).forEach(item => {
+        recordSale(item.product.id, item.quantity);
+      });
+
+      // 5️⃣ Create order object
       const order = {
         id: Date.now().toString(),
         items: cartItems,
@@ -45,18 +67,26 @@ const CheckoutModal = ({ onClose }) => {
         ...orderData,
         status: 'pending',
         createdAt: new Date().toISOString(),
-        customerId: user.id
+        customerId: user.id,
+        customerEmail: user.email,
+        customerName: user.name || user.displayName || ''
       };
 
-      // Save order to localStorage (demo purposes)
-      const existingOrders = JSON.parse(localStorage.getItem('simple-dough-orders') || '[]');
-      existingOrders.push(order);
-      localStorage.setItem('simple-dough-orders', JSON.stringify(existingOrders));
+      // 6️⃣ Save order globally
+      const existingGlobalOrders = JSON.parse(localStorage.getItem('simple-dough-orders') || '[]');
+      existingGlobalOrders.push(order);
+      localStorage.setItem('simple-dough-orders', JSON.stringify(existingGlobalOrders));
 
-      // Clear cart
+      // 7️⃣ Save order per user
+      const userKey = `simple-dough-orders-${user.email}`;
+      const existingUserOrders = JSON.parse(localStorage.getItem(userKey) || '[]');
+      existingUserOrders.push(order);
+      localStorage.setItem(userKey, JSON.stringify(existingUserOrders));
+
+      // 8️⃣ Clear cart
       clearCart();
 
-      // Show success modal
+      // 9️⃣ Show success modal
       setOrderSuccess(order);
     } catch (error) {
       alert('Failed to process order. Please try again.');

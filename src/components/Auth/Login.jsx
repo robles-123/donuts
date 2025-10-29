@@ -14,33 +14,28 @@ const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // Demo accounts for testing
-  const demoAccounts = {
-    admin: { email: 'admin@simpledough.com', password: 'admin123', name: 'Admin User', role: 'admin' },
-    customer: { email: 'customer@example.com', password: 'customer123', name: 'John Doe', role: 'customer' }
-  };
-
   const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
 
-    // Simple demo authentication
-    const account = Object.values(demoAccounts).find(
-      acc => acc.email === formData.email && acc.password === formData.password
-    );
+    try {
+      // ✅ Use the AuthContext login function
+      login({
+        email: formData.email,
+        password: formData.password,
+      });
 
-    if (account) {
-      login(account);
-      navigate(account.role === 'admin' ? '/admin' : '/menu');
-    } else {
-      setError('Invalid email or password');
+      // ✅ Redirect based on user role (stored in localStorage)
+      const user = JSON.parse(localStorage.getItem('simple-dough-user'));
+      if (user) {
+        navigate(user.role === 'admin' ? '/admin' : '/menu');
+      } else {
+        setError('Invalid login or missing user data.');
+      }
+    } catch (err) {
+      // ✅ Catch AuthContext errors (like "Invalid email or password")
+      setError(err.message || 'Login failed. Please try again.');
     }
-  };
-
-  const handleDemoLogin = (type) => {
-    const account = demoAccounts[type];
-    login(account);
-    navigate(account.role === 'admin' ? '/admin' : '/menu');
   };
 
   return (
@@ -55,6 +50,7 @@ const Login = () => {
         </div>
 
         <div className="bg-white rounded-xl shadow-lg p-8">
+          {/* ✅ Error message display */}
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
               {error}
@@ -110,26 +106,6 @@ const Login = () => {
               Sign In
             </button>
           </form>
-
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <div className="text-center text-sm text-gray-600 mb-4">
-              Demo Accounts (for testing):
-            </div>
-            <div className="space-y-2">
-              <button
-                onClick={() => handleDemoLogin('admin')}
-                className="w-full bg-purple-100 text-purple-700 py-2 rounded-lg font-medium hover:bg-purple-200 transition-colors"
-              >
-                Login as Admin
-              </button>
-              <button
-                onClick={() => handleDemoLogin('customer')}
-                className="w-full bg-blue-100 text-blue-700 py-2 rounded-lg font-medium hover:bg-blue-200 transition-colors"
-              >
-                Login as Customer
-              </button>
-            </div>
-          </div>
 
           <div className="mt-6 text-center">
             <p className="text-gray-600">
