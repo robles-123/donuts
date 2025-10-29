@@ -99,11 +99,25 @@ export const AuthProvider = ({ children }) => {
     setOrderHistory((prev) => [...prev, newOrder]);
   };
 
+  // ✅ Update the currently logged in user's profile
+  const updateProfile = (updates) => {
+    if (!user) throw new Error('No user logged in');
+
+    const users = JSON.parse(localStorage.getItem('simple-dough-users')) || [];
+    const updatedUser = { ...user, ...updates, updatedAt: new Date().toISOString() };
+
+    const newUsers = users.map((u) => (u.id === updatedUser.id ? updatedUser : u));
+    localStorage.setItem('simple-dough-users', JSON.stringify(newUsers));
+    localStorage.setItem('simple-dough-user', JSON.stringify(updatedUser));
+    setUser(updatedUser);
+  };
+
   const value = {
     user,
     login,
     logout,
     register,
+    updateProfile,
     loading,
     orderHistory, // ✅ expose order history
     addOrder, // ✅ expose function to add order

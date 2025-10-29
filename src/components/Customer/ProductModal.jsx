@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Plus, Minus, ShoppingCart } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useInventory } from '../../context/InventoryContext';
+import { useAuth } from '../../context/AuthContext';
 
 const ProductModal = ({ product, onClose }) => {
   const [quantity, setQuantity] = useState(1);
@@ -16,6 +17,7 @@ const ProductModal = ({ product, onClose }) => {
 
   const { addToCart } = useCart();
   const { getProductStock, isProductAvailable } = useInventory();
+  const { user } = useAuth();
 
   const stock = getProductStock(product.id);
   const maxQuantity = Math.min(10, stock);
@@ -62,6 +64,40 @@ const ProductModal = ({ product, onClose }) => {
 
     addToCart(product, customizations);
     onClose();
+  };
+
+  // Reviews: save locally to localStorage under 'simple-dough-reviews'
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+  const [reviews, setReviews] = useState([]);
+
+  // Load existing reviews when modal opens
+  useEffect(() => {
+    const allReviews = JSON.parse(localStorage.getItem('simple-dough-reviews') || '[]');
+    const productReviews = allReviews.filter(r => r.productId === product.id.toString() || r.productId === product.id);
+    setReviews(productReviews.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+  }, [product.id]);
+
+  const saveReview = () => {
+    const reviews = JSON.parse(localStorage.getItem('simple-dough-reviews') || '[]');
+    const newReview = {
+      id: Date.now().toString(),
+      productId: product.id,
+      userId: user?.id || null,
+      name: user?.name || 'Anonymous',
+      rating: Number(rating),
+      comment: comment.trim(),
+      createdAt: new Date().toISOString()
+    };
+
+    reviews.push(newReview);
+    localStorage.setItem('simple-dough-reviews', JSON.stringify(reviews));
+    
+    // Reset form and update reviews list
+    setRating(5);
+    setComment('');
+    setReviews(prev => [newReview, ...prev]); // Add new review to top of list
+    alert('Thanks — your review was saved.');
   };
 
   return (
@@ -236,6 +272,47 @@ const ProductModal = ({ product, onClose }) => {
             </div>
           </div>
 
+          {/* Reviews (rating + comment) */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-gray-900">Leave a review</h3>
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-gray-600">Rating</label>
+              <select
+                value={rating}
+                onChange={(e) => setRating(e.target.value)}
+                className="px-3 py-2 border rounded-lg"
+              >
+                <option value={5}>5 - Excellent</option>
+                <option value={4}>4 - Very good</option>
+                <option value={3}>3 - Good</option>
+                <option value={2}>2 - Fair</option>
+                <option value={1}>1 - Poor</option>
+              </select>
+            </div>
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Write an optional comment (max 500 chars)"
+              maxLength={500}
+              className="w-full p-3 border rounded-lg text-sm"
+              rows={3}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={saveReview}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                Submit Review
+              </button>
+              <button
+                onClick={() => { setRating(5); setComment(''); }}
+                className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+
           {/* Add to Cart Button */}
           <button
             onClick={handleAddToCart}
@@ -249,6 +326,32 @@ const ProductModal = ({ product, onClose }) => {
             <ShoppingCart className="w-5 h-5" />
             Add to Cart
           </button>
+
+          {/* Reviews List */}
+          {reviews.length > 0 && (
+            <div className="mt-8 space-y-4">
+              <h3 className="font-semibold text-gray-900">Customer Reviews ({reviews.length})</h3>
+              <div className="space-y-4">
+                {reviews.map(review => (
+                  <div key={review.id} className="bg-gray-50 p-4 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{review.name}</span>
+                        <span className="text-amber-500">{'★'.repeat(review.rating)}</span>
+                        <span className="text-gray-400">{'☆'.repeat(5 - review.rating)}</span>
+                      </div>
+                      <span className="text-sm text-gray-500">
+                        {new Date(review.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    {review.comment && (
+                      <p className="text-gray-600 text-sm">{review.comment}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

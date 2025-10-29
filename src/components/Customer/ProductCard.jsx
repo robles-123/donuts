@@ -3,12 +3,26 @@ import { Plus, Heart, Info } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useInventory } from '../../context/InventoryContext';
 import ProductModal from './ProductModal';
+import { useEffect } from 'react';
 
 const ProductCard = ({ product }) => {
   const [showModal, setShowModal] = useState(false);
   const [liked, setLiked] = useState(false);
   const { addToCart } = useCart();
   const { getProductStock, isProductAvailable } = useInventory();
+
+  // Reviews: compute average rating and count
+  const [avgRating, setAvgRating] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
+
+  useEffect(() => {
+    const reviews = JSON.parse(localStorage.getItem('simple-dough-reviews') || '[]');
+    const productReviews = reviews.filter(r => r.productId === product.id.toString() || r.productId === product.id);
+    const count = productReviews.length;
+    const avg = count > 0 ? (productReviews.reduce((s, r) => s + (r.rating || 0), 0) / count) : 0;
+    setAvgRating(Number(avg.toFixed(1)));
+    setReviewCount(count);
+  }, [product.id]);
 
   const stock = getProductStock(product.id);
   const available = isProductAvailable(product.id);
@@ -80,6 +94,10 @@ const ProductCard = ({ product }) => {
         {/* Content */}
         <div className="p-6">
           <h3 className="text-xl font-bold text-gray-900 mb-2">{product.name}</h3>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="text-sm text-amber-600 font-semibold">{avgRating > 0 ? `${avgRating} ★` : 'No rating'}</div>
+            <div className="text-xs text-gray-500">{reviewCount} reviews</div>
+          </div>
           <p className="text-gray-600 text-sm mb-4">{product.description}</p>
           
           {/* Price */}

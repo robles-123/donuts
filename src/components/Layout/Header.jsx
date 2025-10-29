@@ -71,7 +71,7 @@ const Header = () => {
               <div className="flex items-center space-x-2">
                 <div className="flex items-center space-x-2 text-sm">
                   <User className="w-4 h-4" />
-                  <span className="hidden sm:inline">{user.name}</span>
+                  <Link to="/profile" className="hidden sm:inline text-gray-700 hover:text-amber-600">{user.name}</Link>
                   {isAdmin && (
                     <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">
                       Admin
