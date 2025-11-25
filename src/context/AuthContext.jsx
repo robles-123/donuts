@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
 
 const AuthContext = createContext();
 
@@ -16,66 +17,135 @@ export const AuthProvider = ({ children }) => {
   const [orderHistory, setOrderHistory] = useState([]); // ✅ Added order history state
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('simple-dough-user');
-    if (savedUser) {
-      const parsedUser = JSON.parse(savedUser);
-      setUser(parsedUser);
+    let mounted = true;
 
-      // ✅ Load this user's order history
-      const allOrders = JSON.parse(localStorage.getItem('simple-dough-orders')) || [];
-      const userOrders = allOrders.filter((order) => order.userId === parsedUser.id);
-      setOrderHistory(userOrders);
-    }
-    setLoading(false);
+    const init = async () => {
+      setLoading(true);
+      try {
+        const { data } = await supabase.auth.getSession();
+        const sessionUser = data?.session?.user ?? null;
+
+        if (sessionUser && mounted) {
+          const profile = {
+            id: sessionUser.id,
+            email: sessionUser.email,
+            name: sessionUser.user_metadata?.name || sessionUser.email,
+            role: sessionUser.user_metadata?.role || 'customer',
+            phone: sessionUser.user_metadata?.phone || '',
+            address: sessionUser.user_metadata?.address || '',
+          };
+
+          setUser(profile);
+
+          // Load order history from localStorage (keeps existing behavior)
+          const allOrders = JSON.parse(localStorage.getItem('simple-dough-orders')) || [];
+          const userOrders = allOrders.filter((order) => order.userId === profile.id);
+          setOrderHistory(userOrders);
+        }
+      } catch (err) {
+        console.warn('Failed to get supabase session', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    init();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const sessionUser = session?.user ?? null;
+
+      if (!sessionUser) {
+        setUser(null);
+        setOrderHistory([]);
+      } else {
+        const profile = {
+          id: sessionUser.id,
+          email: sessionUser.email,
+          name: sessionUser.user_metadata?.name || sessionUser.email,
+          role: sessionUser.user_metadata?.role || 'customer',
+          phone: sessionUser.user_metadata?.phone || '',
+          address: sessionUser.user_metadata?.address || '',
+        };
+        setUser(profile);
+        const allOrders = JSON.parse(localStorage.getItem('simple-dough-orders')) || [];
+        const userOrders = allOrders.filter((order) => order.userId === profile.id);
+        setOrderHistory(userOrders);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      try {
+        listener?.subscription?.unsubscribe?.();
+      } catch (err) {
+        // ignore
+      }
+    };
   }, []);
 
   // ✅ Register a new user
-  const register = (userData) => {
-    const users = JSON.parse(localStorage.getItem('simple-dough-users')) || [];
+  const register = async (userData) => {
+    const { name, email, phone, address, password } = userData;
 
-    // Check if email already exists
-    if (users.some((u) => u.email === userData.email)) {
-      throw new Error('Email already registered');
-    }
-
-    const newUser = {
-      ...userData,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
+    const options = {
+      data: {
+        name,
+        phone,
+        address,
+        role: 'customer',
+      },
     };
 
-    users.push(newUser);
-    localStorage.setItem('simple-dough-users', JSON.stringify(users));
-    localStorage.setItem('simple-dough-user', JSON.stringify(newUser));
-    setUser(newUser);
+    const { data, error } = await supabase.auth.signUp({ email, password }, options);
+    if (error) throw error;
 
-    return newUser;
+    const sessionUser = data?.user ?? null;
+    if (sessionUser) {
+      const profile = {
+        id: sessionUser.id,
+        email: sessionUser.email,
+        name: sessionUser.user_metadata?.name || name || sessionUser.email,
+        role: sessionUser.user_metadata?.role || 'customer',
+        phone: sessionUser.user_metadata?.phone || phone || '',
+        address: sessionUser.user_metadata?.address || address || '',
+      };
+      setUser(profile);
+      return profile;
+    }
+
+    return null;
   };
 
   // ✅ Login existing user
-  const login = ({ email, password }) => {
-    const users = JSON.parse(localStorage.getItem('simple-dough-users')) || [];
-    const foundUser = users.find(
-      (u) => u.email === email && u.password === password
-    );
+  const login = async ({ email, password }) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
 
-    if (!foundUser) {
-      throw new Error('Invalid email or password');
+    const sessionUser = data?.user ?? null;
+    if (sessionUser) {
+      const profile = {
+        id: sessionUser.id,
+        email: sessionUser.email,
+        name: sessionUser.user_metadata?.name || sessionUser.email,
+        role: sessionUser.user_metadata?.role || 'customer',
+        phone: sessionUser.user_metadata?.phone || '',
+        address: sessionUser.user_metadata?.address || '',
+      };
+      setUser(profile);
+
+      const allOrders = JSON.parse(localStorage.getItem('simple-dough-orders')) || [];
+      const userOrders = allOrders.filter((order) => order.userId === profile.id);
+      setOrderHistory(userOrders);
+      return profile;
     }
 
-    setUser(foundUser);
-    localStorage.setItem('simple-dough-user', JSON.stringify(foundUser));
-
-    // ✅ Load order history for this user
-    const allOrders = JSON.parse(localStorage.getItem('simple-dough-orders')) || [];
-    const userOrders = allOrders.filter((order) => order.userId === foundUser.id);
-    setOrderHistory(userOrders);
+    throw new Error('Login failed');
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    setOrderHistory([]); // ✅ Clear order history when logging out
-    localStorage.removeItem('simple-dough-user');
+    setOrderHistory([]);
     localStorage.removeItem('simple-dough-cart');
   };
 
@@ -100,22 +170,41 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ✅ Update the currently logged in user's profile
-  const updateProfile = (updates) => {
+  const updateProfile = async (updates) => {
     if (!user) throw new Error('No user logged in');
 
-    const users = JSON.parse(localStorage.getItem('simple-dough-users')) || [];
-    const updatedUser = { ...user, ...updates, updatedAt: new Date().toISOString() };
+    const { data, error } = await supabase.auth.updateUser({ data: updates });
+    if (error) throw error;
 
-    const newUsers = users.map((u) => (u.id === updatedUser.id ? updatedUser : u));
-    localStorage.setItem('simple-dough-users', JSON.stringify(newUsers));
-    localStorage.setItem('simple-dough-user', JSON.stringify(updatedUser));
-    setUser(updatedUser);
+    const sessionUser = data?.user ?? null;
+    if (sessionUser) {
+      const profile = {
+        id: sessionUser.id,
+        email: sessionUser.email,
+        name: sessionUser.user_metadata?.name || sessionUser.email,
+        role: sessionUser.user_metadata?.role || 'customer',
+        phone: sessionUser.user_metadata?.phone || '',
+        address: sessionUser.user_metadata?.address || '',
+      };
+      setUser(profile);
+      return profile;
+    }
+
+    return null;
   };
 
   // ✅ Verify current password before allowing email/password changes
-  const verifyCurrentPassword = (currentPassword) => {
+  const verifyCurrentPassword = async (currentPassword) => {
     if (!user) throw new Error('No user logged in');
-    return user.password === currentPassword;
+
+    // Re-authenticate by attempting sign in. If it succeeds, password is valid.
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword });
+      if (error) throw error;
+      return !!data?.user;
+    } catch (err) {
+      return false;
+    }
   };
 
   const value = {

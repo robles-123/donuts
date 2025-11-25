@@ -16,20 +16,20 @@ const Login = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
+    (async () => {
+      try {
+        // ✅ Use AuthContext login function
+        await login({
+          email: formData.email,
+          password: formData.password,
+        });
 
-    try {
-      // ✅ Use AuthContext login function
-      login({
-        email: formData.email,
-        password: formData.password
-      });
-
-      // ✅ Only customer frontend, redirect to /menu
-      navigate('/menu');
-
-    } catch (err) {
-      setError(err.message || 'Login failed. Please try again.');
-    }
+        // ✅ Only customer frontend, redirect to /menu
+        navigate('/menu');
+      } catch (err) {
+        setError(err?.message || 'Login failed. Please try again.');
+      }
+    })();
   };
 
   return (

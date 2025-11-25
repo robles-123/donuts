@@ -38,23 +38,25 @@ const Register = () => {
       return;
     }
 
-    try {
-      // backend will always receive "customer"
-      const userData = {
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        address: formData.address,
-        password: formData.password,
-        role: "customer"   // 🔐 HARD-CODED FOR SAFETY
-      };
+    (async () => {
+      try {
+        // backend will always receive "customer"
+        const userData = {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          password: formData.password,
+          role: 'customer',
+        };
 
-      register(userData);
-      setSuccess('Registered successfully!');
-      navigate('/menu');   // always route to customer menu
-    } catch (err) {
-      setError(err.message || 'Registration failed. Please try again.');
-    }
+        await register(userData);
+        setSuccess('Registered successfully!');
+        navigate('/menu'); // always route to customer menu
+      } catch (err) {
+        setError(err?.message || 'Registration failed. Please try again.');
+      }
+    })();
   };
 
   return (
