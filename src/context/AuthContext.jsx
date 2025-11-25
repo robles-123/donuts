@@ -149,24 +149,69 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('simple-dough-cart');
   };
 
-  // ✅ Save new order for this user
-  const addOrder = (orderData) => {
+  // ✅ Save new order for this user — persist to Supabase `orders` table with fallback to localStorage
+  const addOrder = async (orderData) => {
     if (!user) throw new Error('You must be logged in to place an order.');
 
-    const allOrders = JSON.parse(localStorage.getItem('simple-dough-orders')) || [];
-    const newOrder = {
-      ...orderData,
-      id: Date.now().toString(),
-      userId: user.id,
+    const timestamp = new Date().toISOString();
+
+    // Prepare record for Supabase. Column names should match your `orders` table.
+    const orderRecord = {
+      user_id: user.id,
       email: user.email,
-      createdAt: new Date().toISOString(),
+      items: orderData.items || orderData.cart || [],
+      total: orderData.total ?? orderData.amount ?? 0,
+      status: orderData.status || 'pending',
+      metadata: orderData.metadata || {},
+      created_at: timestamp,
     };
 
-    allOrders.push(newOrder);
-    localStorage.setItem('simple-dough-orders', JSON.stringify(allOrders));
+    try {
+      const { data, error } = await supabase.from('orders').insert([orderRecord]).select();
+      if (error) throw error;
 
-    // Update local state
-    setOrderHistory((prev) => [...prev, newOrder]);
+      const inserted = data?.[0];
+
+      // Normalize newOrder for local state (use inserted.id if available)
+      const newOrder = {
+        id: inserted?.id || Date.now().toString(),
+        userId: user.id,
+        email: user.email,
+        items: orderRecord.items,
+        total: orderRecord.total,
+        status: orderRecord.status,
+        metadata: orderRecord.metadata,
+        createdAt: inserted?.created_at || timestamp,
+      };
+
+      // Update local state
+      setOrderHistory((prev) => [...prev, newOrder]);
+
+      // Optionally keep a local cache for offline use
+      const allOrders = JSON.parse(localStorage.getItem('simple-dough-orders')) || [];
+      allOrders.push(newOrder);
+      localStorage.setItem('simple-dough-orders', JSON.stringify(allOrders));
+
+      return newOrder;
+    } catch (err) {
+      console.warn('Failed to persist order to Supabase, falling back to localStorage', err);
+
+      // Fallback: save to localStorage like original behavior
+      const allOrders = JSON.parse(localStorage.getItem('simple-dough-orders')) || [];
+      const newOrder = {
+        ...orderData,
+        id: Date.now().toString(),
+        userId: user.id,
+        email: user.email,
+        createdAt: timestamp,
+      };
+
+      allOrders.push(newOrder);
+      localStorage.setItem('simple-dough-orders', JSON.stringify(allOrders));
+      setOrderHistory((prev) => [...prev, newOrder]);
+
+      return newOrder;
+    }
   };
 
   // ✅ Update the currently logged in user's profile

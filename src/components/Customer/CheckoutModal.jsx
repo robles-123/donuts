@@ -7,7 +7,7 @@ import CheckoutSuccess from './CheckoutSuccess';
 
 const CheckoutModal = ({ onClose }) => {
   const { cartItems, getTotalPrice, clearCart } = useCart();
-  const { user } = useAuth();
+  const { user, addOrder } = useAuth();
   const { recordSale, getProductStock } = useInventory();
   
   const [orderData, setOrderData] = useState({
@@ -59,35 +59,27 @@ const CheckoutModal = ({ onClose }) => {
         recordSale(item.product.id, item.quantity);
       });
 
-      // 5️⃣ Create order object
-      const order = {
-        id: Date.now().toString(),
+      // 5️⃣ Create order payload for persistence
+      const orderPayload = {
         items: cartItems,
         total,
-        ...orderData,
         status: 'pending',
-        createdAt: new Date().toISOString(),
-        customerId: user.id,
-        customerEmail: user.email,
-        customerName: user.name || user.displayName || ''
+        metadata: {
+          paymentMethod: orderData.paymentMethod,
+          deliveryMethod: orderData.deliveryMethod,
+          deliveryAddress: orderData.deliveryAddress,
+          phone: orderData.phone,
+          notes: orderData.notes,
+          customerName: user.name || user.displayName || '',
+        },
       };
 
-      // 6️⃣ Save order globally
-      const existingGlobalOrders = JSON.parse(localStorage.getItem('simple-dough-orders') || '[]');
-      existingGlobalOrders.push(order);
-      localStorage.setItem('simple-dough-orders', JSON.stringify(existingGlobalOrders));
+      // 6️⃣ Persist order via AuthContext (Supabase) with built-in fallback
+      const savedOrder = await addOrder(orderPayload);
 
-      // 7️⃣ Save order per user
-      const userKey = `simple-dough-orders-${user.email}`;
-      const existingUserOrders = JSON.parse(localStorage.getItem(userKey) || '[]');
-      existingUserOrders.push(order);
-      localStorage.setItem(userKey, JSON.stringify(existingUserOrders));
-
-      // 8️⃣ Clear cart
+      // 7️⃣ Clear cart and show success
       clearCart();
-
-      // 9️⃣ Show success modal
-      setOrderSuccess(order);
+      setOrderSuccess(savedOrder);
     } catch (error) {
       alert('Failed to process order. Please try again.');
     } finally {
