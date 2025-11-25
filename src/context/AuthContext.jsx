@@ -23,7 +23,7 @@ export const AuthProvider = ({ children }) => {
         .from('user_roles')
         .select('role')
         .eq('user_id', userId)
-        .eq('role', 'admin')
+        .ilike('role', 'admin')
         .single();
       
       if (error && error.code !== 'PGRST116') {
