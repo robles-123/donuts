@@ -57,8 +57,8 @@ create table if not exists public.orders (
 alter table public.orders enable row level security;
 
 -- Policy: allow inserts for authenticated users
+-- Policy: allow inserts for authenticated users
 create policy "allow insert for authenticated users" on public.orders
 for insert
-using (auth.role() = 'authenticated')
 with check (auth.role() = 'authenticated');
 ```
