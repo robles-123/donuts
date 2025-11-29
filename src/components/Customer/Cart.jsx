@@ -68,8 +68,14 @@ const Cart = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Cart Items */}
         <div className="lg:col-span-2 space-y-4">
-          {cartItems.map(item => (
-            <div key={item.id} className="bg-white rounded-xl shadow-lg p-6">
+          {cartItems.map(item => {
+            const customizations = item.customizations || {};
+            const quantity = item.quantity || 1;
+            const unitPrice = item.product?.price || 0;
+            const totalPrice = item.totalPrice ?? unitPrice * quantity;
+
+            return (
+              <div key={item.id} className="bg-white rounded-xl shadow-lg p-6">
               <div className="flex flex-col sm:flex-row gap-4">
                 {/* Product Image */}
                 <img
@@ -114,54 +120,57 @@ const Cart = () => {
                       className="p-2 hover:bg-gray-100 rounded-l-lg"
                     >
                       <Minus className="w-4 h-4" />
-                    </button>
-                    <span className="px-3 py-2 font-semibold">{item.quantity}</span>
+                    {/* Customizations */}
+                    {customizations.flavors && customizations.flavors.length > 0 && (
+                      <p className="text-sm text-gray-600 mb-1">
+                        <span className="font-medium">Flavors:</span> {customizations.flavors.join(', ')}
+                      </p>
+                    )}
+                    {customizations.toppings && (
+                      <div className="text-sm text-gray-600 mb-1">
+                        {customizations.toppings.classic && (
+                          <p><span className="font-medium">Classic:</span> {customizations.toppings.classic}</p>
+                        )}
+                        {customizations.toppings.premium && (
+                          <p><span className="font-medium">Premium:</span> {customizations.toppings.premium}</p>
+                        )}
+                      </div>
+                    )}
+
+                    <p className="text-amber-600 font-semibold text-lg">
+                      ₱{unitPrice} × {quantity} = ₱{totalPrice}
+                    </p>
+                  </div>
+                
+                  {/* Quantity Controls */}
+                  <div className="flex flex-col items-end gap-3">
+                    <div className="flex items-center gap-2 border border-gray-300 rounded-lg">
+                      <button
+                        onClick={() => handleDecrement(item)}
+                        className="p-2 hover:bg-gray-100 rounded-l-lg"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <span className="px-3 py-2 font-semibold">{quantity}</span>
+                      <button
+                        onClick={() => handleIncrement(item)}
+                        className="p-2 hover:bg-gray-100 rounded-r-lg"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  
                     <button
-                      onClick={() => handleIncrement(item)}
-                      className="p-2 hover:bg-gray-100 rounded-r-lg"
+                      onClick={() => removeFromCart(item.id)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
-                      <Plus className="w-4 h-4" />
+                      <Trash2 className="w-5 h-5" />
                     </button>
                   </div>
-                  
-                  <button
-                    onClick={() => removeFromCart(item.id)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Order Summary */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl shadow-lg p-6 sticky top-4">
-            <h3 className="text-xl font-bold text-gray-900 mb-6">Order Summary</h3>
-            
-            <div className="space-y-3 mb-6">
-              <div className="flex justify-between">
-                <span>Subtotal ({getTotalItems()} items)</span>
-                <span>₱{getTotalPrice()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Delivery Fee</span>
-                <span>₱50</span>
-              </div>
-              <div className="border-t pt-3">
-                <div className="flex justify-between text-lg font-bold">
-                  <span>Total</span>
-                  <span className="text-amber-600">₱{getTotalPrice() + 50}</span>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowCheckout(true)}
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-4 rounded-lg font-semibold hover:from-amber-600 hover:to-orange-600 transition-all transform hover:scale-105"
-            >
+              );
+            })}
+        
               Proceed to Checkout
             </button>
 
