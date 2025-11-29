@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, Download, Calendar, DollarSign, ShoppingCart, Users, Package } from 'lucide-react';
+import { supabase } from '../../lib/supabaseClient';
 
 const Reports = () => {
   const [orders, setOrders] = useState([]);
@@ -15,8 +16,37 @@ const Reports = () => {
   });
 
   useEffect(() => {
-    const savedOrders = JSON.parse(localStorage.getItem('simple-dough-orders') || '[]');
-    setOrders(savedOrders);
+    // Try Supabase first so reports reflect server-side orders (admin updates)
+    const fetchOrders = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          const processed = data.map(order => ({
+            ...order,
+            id: order.id,
+            createdAt: order.created_at || order.createdAt,
+            total: order.total || order.metadata?.total || 0,
+            items: order.items || order.metadata?.items || [],
+            customerId: order.user_id || order.customerId || order.metadata?.user_id,
+            paymentMethod: order.metadata?.paymentMethod || order.paymentMethod || 'N/A',
+            deliveryMethod: order.metadata?.deliveryMethod || order.deliveryMethod || 'pickup'
+          }));
+          setOrders(processed);
+          return;
+        }
+      } catch (err) {
+        console.warn('Reports: Supabase fetch failed, falling back to localStorage', err);
+      }
+
+      const savedOrders = JSON.parse(localStorage.getItem('simple-dough-orders') || '[]');
+      setOrders(savedOrders);
+    };
+
+    fetchOrders();
   }, []);
 
   useEffect(() => {
