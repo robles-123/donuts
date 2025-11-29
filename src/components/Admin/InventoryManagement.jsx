@@ -4,7 +4,7 @@ import { useInventory } from '../../context/InventoryContext';
 import { PRODUCTS } from '../../data/products';
 
 const InventoryManagement = () => {
-  const { inventory, updateDailyLimit, resetDailyInventory, getLowStockProducts, revertStock  } = useInventory();
+  const { inventory, updateDailyLimit, getLowStockProducts, revertStock  } = useInventory();
 
   // Helper to revert multiple items at once
 const revertMultipleItems = (items) => {
@@ -122,12 +122,7 @@ const revertMultipleItems = (items) => {
           <p className="text-gray-600">Manage daily stock limits and monitor inventory levels</p>
         </div>
         <div className="flex gap-3 mt-4 sm:mt-0">
-          <button
-            onClick={resetDailyInventory}
-            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition-all transform hover:scale-105 shadow-lg"
-          >
-            Reset Daily Stock
-          </button>
+          {/* Reset Daily Stock button removed by request */}
         </div>
       </div>
 

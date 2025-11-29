@@ -80,19 +80,7 @@ export const InventoryProvider = ({ children }) => {
   });
 };
 
-  const resetDailyInventory = () => {
-    setInventory(prev => {
-      const newInventory = {};
-      Object.keys(prev).forEach(productId => {
-        newInventory[productId] = {
-          ...prev[productId],
-          currentStock: prev[productId].dailyLimit,
-          soldToday: 0
-        };
-      });
-      return newInventory;
-    });
-  };
+  // resetDailyInventory removed — resets handled locally via updateDailyLimit/recordSale/revertStock
 
   const getProductStock = (productId) => {
     return inventory[productId]?.currentStock || 0;
@@ -114,7 +102,7 @@ export const InventoryProvider = ({ children }) => {
     updateDailyLimit,
     recordSale,
     revertStock, 
-    resetDailyInventory,
+    // resetDailyInventory removed
     getProductStock,
     isProductAvailable,
     getLowStockProducts
