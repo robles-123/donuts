@@ -1,40 +1,90 @@
-import { useInventory } from '../../context/InventoryContext';
+import { RefreshCw } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Eye, CheckCircle, Clock, Truck, Mail, Package, Phone, MapPin, Calendar } from 'lucide-react';
+import { supabase } from '../../lib/supabaseClient';
+import { useAuth } from '../../context/AuthContext';
 
 const OrderManagement = () => {
+  const { user, isAdmin } = useAuth();
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const { revertStock } = useInventory();
+  // Fetch orders from Supabase
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      // Try fetching all orders first (relies on RLS policy)
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-  const revertMultipleItems = (items) => {
-    items.forEach(item => revertStock(item.product.id, item.quantity));
+      if (error) {
+        console.error('RLS Error fetching orders:', error);
+        // If RLS blocks, try fallback
+        throw error;
+      }
+
+      console.log('Raw fetch result:', { data, error });
+
+      // Parse items jsonb and flatten structure for display
+      const processedOrders = (data || []).map(order => ({
+        ...order,
+        displayId: order.id.slice(-8), // Use last 8 chars of UUID for display
+        createdAt: order.created_at,
+        customerName: order.metadata?.customerName || 'Unknown',
+        customerEmail: order.email,
+        phone: order.metadata?.phone || '',
+        deliveryAddress: order.metadata?.deliveryAddress || '',
+        deliveryMethod: order.metadata?.deliveryMethod || 'pickup',
+        paymentMethod: order.metadata?.paymentMethod || 'unknown',
+        notes: order.metadata?.notes || '',
+      }));
+
+      console.log('Processed orders:', processedOrders);
+      setOrders(processedOrders);
+      setFilteredOrders(processedOrders);
+    } catch (err) {
+      console.error('Error fetching orders from Supabase:', err);
+      console.log('Falling back to localStorage...');
+      
+      // Fallback: load from localStorage if Supabase fails
+      try {
+        const localOrders = JSON.parse(localStorage.getItem('simple-dough-orders') || '[]');
+        const processedOrders = localOrders.map(order => ({
+          ...order,
+          displayId: (order.id || '').slice(-8),
+          createdAt: order.createdAt || order.created_at,
+        }));
+        console.log('Loaded from localStorage:', processedOrders);
+        setOrders(processedOrders);
+        setFilteredOrders(processedOrders);
+      } catch (localErr) {
+        console.error('Also failed to load from localStorage:', localErr);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-
   useEffect(() => {
-    // Load orders from localStorage
-    const savedOrders = JSON.parse(localStorage.getItem('simple-dough-orders') || '[]');
-
-     // Sort by newest first
-  const sortedOrders = savedOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  
-  setOrders(sortedOrders);
-  setFilteredOrders(sortedOrders);
+    fetchOrders();
   }, []);
 
+  // Update filtered orders when search or filter changes
   useEffect(() => {
-    let filtered = orders;
+    let filtered = [...orders];
 
     // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter(order =>
-        order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.phone.includes(searchTerm)
+        order.displayId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.phone.includes(searchTerm) ||
+        order.customerEmail.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -46,24 +96,43 @@ const OrderManagement = () => {
     setFilteredOrders(filtered);
   }, [orders, searchTerm, statusFilter]);
 
-  const updateOrderStatus = (orderId, newStatus) => {
-    const updatedOrders = orders.map(order => {
-      if (order.id === orderId) {
-        // If cancelling, revert stock
-        if (newStatus === 'cancelled' && order.status !== 'cancelled') {
-          revertMultipleItems(order.items);
-        }
-        return { ...order, status: newStatus, cancelledBy: newStatus === 'cancelled' ? 'admin' : undefined };
+  const updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      // Check if user is admin before attempting update
+      if (!isAdmin) {
+        alert('Only admins can update order status');
+        return;
       }
-      return order;
-    });
 
-    setOrders(updatedOrders);
-    localStorage.setItem('simple-dough-orders', JSON.stringify(updatedOrders));
+      console.log('Admin updating order', orderId, 'to status', newStatus);
+      
+      // Optimistically update the UI first
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+      setFilteredOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+      if (selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder(prev => ({ ...prev, status: newStatus }));
+      }
 
-    // Also update selectedOrder if modal is open
-    if (selectedOrder && selectedOrder.id === orderId) {
-      setSelectedOrder({ ...selectedOrder, status: newStatus });
+      const { data, error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', orderId)
+        .select();
+
+      console.log('Update response:', { data, error });
+
+      if (error) {
+        console.error('Update error details:', error);
+        throw error;
+      }
+
+      console.log('✅ Update successful:', data);
+      alert('Order status updated successfully');
+    } catch (err) {
+      console.error('Error updating order status:', err.message || err);
+      alert(`Failed to update order status: ${err.message || JSON.stringify(err)}`);
+      // Revert optimistic update on error
+      fetchOrders();
     }
   };
 
@@ -102,12 +171,30 @@ const OrderManagement = () => {
     { value: 'cancelled', label: 'Cancelled' }
   ];
 
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8 text-center">
+        <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-amber-500" />
+        <p className="text-gray-600">Loading orders...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Order Management</h1>
-        <p className="text-gray-600">Track and manage all customer orders</p>
+      <div className="mb-8 flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Order Management</h1>
+          <p className="text-gray-600">Track and manage all customer orders</p>
+        </div>
+        <button
+          onClick={fetchOrders}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh
+        </button>
       </div>
 
       {/* Filters */}
@@ -118,7 +205,7 @@ const OrderManagement = () => {
             <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Search by Order ID or Phone..."
+              placeholder="Search by Order ID, Phone, or Email..."
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -154,13 +241,11 @@ const OrderManagement = () => {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-bold text-gray-900">
-                      Order #{order.id}
+                      Order #{order.displayId}
                     </h3>
                     <span className={`px-3 py-1 rounded-full text-xs font-medium border flex items-center gap-1 ${getStatusColor(order.status)}`}>
                       {getStatusIcon(order.status)}
-                      {order.status === 'cancelled' && order.cancelledBy === 'admin'
-                      ? 'Cancelled by SimpleDough'
-                      : statusOptions.find(s => s.value === order.status)?.label || order.status}
+                      {statusOptions.find(s => s.value === order.status)?.label || order.status}
                     </span>
                   </div>
 
@@ -179,7 +264,7 @@ const OrderManagement = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <Package className="w-4 h-4" />
-                      {order.items.length} items
+                      {order.items?.length || 0} items
                     </div>
                   </div>
 
@@ -225,11 +310,14 @@ const OrderManagement = () => {
           <div className="text-center py-12">
             <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No orders found</h3>
-            <p className="text-gray-600">
+            <p className="text-gray-600 mb-4">
               {searchTerm || statusFilter !== 'all' 
                 ? 'Try adjusting your search or filter criteria.'
                 : 'Orders will appear here once customers start placing them.'
               }
+            </p>
+            <p className="text-xs text-gray-500 bg-gray-50 p-3 rounded inline-block">
+              Check browser console (F12) for debug info
             </p>
           </div>
         )}
@@ -242,7 +330,7 @@ const OrderManagement = () => {
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b">
               <h2 className="text-2xl font-bold text-gray-900">
-                Order #{selectedOrder.id}
+                Order #{selectedOrder.displayId}
               </h2>
               <button
                 onClick={() => setSelectedOrder(null)}
@@ -258,9 +346,7 @@ const OrderManagement = () => {
               <div className="flex items-center gap-3">
                 <span className={`px-4 py-2 rounded-full text-sm font-medium border flex items-center gap-2 ${getStatusColor(selectedOrder.status)}`}>
                   {getStatusIcon(selectedOrder.status)}
-                  {selectedOrder.status === 'cancelled' && selectedOrder.cancelledBy === 'admin'
-                  ? 'Cancelled by SimpleDough'
-                  : statusOptions.find(s => s.value === selectedOrder.status)?.label || selectedOrder.status}
+                  {statusOptions.find(s => s.value === selectedOrder.status)?.label || selectedOrder.status}
                 </span>
                 <span className="text-sm text-gray-600">
                   Ordered on {new Date(selectedOrder.createdAt).toLocaleString()}
@@ -304,21 +390,23 @@ const OrderManagement = () => {
               <div>
                 <h3 className="font-semibold text-gray-900 mb-3">Order Items</h3>
                 <div className="space-y-3">
-                  {selectedOrder.items.map((item, index) => (
+                  {selectedOrder.items?.map((item, index) => (
                     <div key={index} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
-                      <img
-                        src={item.product.image}
-                        alt={item.product.name}
-                        className="w-16 h-16 object-cover rounded-lg"
-                      />
+                      {item.product?.image && (
+                        <img
+                          src={item.product.image}
+                          alt={item.product.name}
+                          className="w-16 h-16 object-cover rounded-lg"
+                        />
+                      )}
                       <div className="flex-1">
-                        <h4 className="font-medium text-gray-900">{item.product.name}</h4>
-                        {item.customizations.flavors && item.customizations.flavors.length > 0 && (
+                        <h4 className="font-medium text-gray-900">{item.product?.name}</h4>
+                        {item.customizations?.flavors && item.customizations.flavors.length > 0 && (
                           <p className="text-sm text-gray-600">
                             Flavors: {item.customizations.flavors.join(', ')}
                           </p>
                         )}
-                        {item.customizations.toppings && (
+                        {item.customizations?.toppings && (
                           <div className="text-sm text-gray-600">
                             {item.customizations.toppings.classic && (
                               <p>Classic: {item.customizations.toppings.classic}</p>
@@ -358,7 +446,7 @@ const OrderManagement = () => {
                   </div>
                   <div className="flex justify-between text-sm text-gray-600">
                     <span>Payment Method:</span>
-                    <span>{selectedOrder.paymentMethod.toUpperCase()}</span>
+                    <span>{selectedOrder.paymentMethod ? selectedOrder.paymentMethod.toUpperCase() : 'N/A'}</span>
                   </div>
                 </div>
               </div>

@@ -23,10 +23,10 @@ export const AuthProvider = ({ children }) => {
         .from('user_roles')
         .select('role')
         .eq('user_id', userId)
-        .ilike('role', 'admin')
-        .single();
-      
-      if (error && error.code !== 'PGRST116') {
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      if (error) {
         console.warn('Error checking admin role:', error);
         return false;
       }
@@ -203,20 +203,40 @@ export const AuthProvider = ({ children }) => {
         id: inserted?.id || Date.now().toString(),
         userId: user.id,
         email: user.email,
+        customerEmail: user.email,
         items: orderRecord.items,
         total: orderRecord.total,
         status: orderRecord.status,
         metadata: orderRecord.metadata,
+        // compatibility for CheckoutSuccess / OrderHistory
+        phone: orderRecord.metadata?.phone || user.phone || '',
+        deliveryAddress: orderRecord.metadata?.deliveryAddress || orderRecord.metadata?.delivery_address || '',
+        paymentMethod: orderRecord.metadata?.paymentMethod || orderRecord.metadata?.payment_method || '',
+        deliveryMethod: orderRecord.metadata?.deliveryMethod || orderRecord.metadata?.delivery_method || '',
+        notes: orderRecord.metadata?.notes || '',
         createdAt: inserted?.created_at || timestamp,
       };
 
       // Update local state
       setOrderHistory((prev) => [...prev, newOrder]);
 
-      // Optionally keep a local cache for offline use
+      // Optionally keep a local cache for offline use (global)
       const allOrders = JSON.parse(localStorage.getItem('simple-dough-orders')) || [];
       allOrders.push(newOrder);
       localStorage.setItem('simple-dough-orders', JSON.stringify(allOrders));
+
+      // Also write a user-specific key so OrderHistory/CheckoutSuccess can read it immediately
+      try {
+        const userKey = `simple-dough-orders-${user.email}`;
+        const existingUserOrders = JSON.parse(localStorage.getItem(userKey) || '[]');
+        existingUserOrders.push(newOrder);
+        localStorage.setItem(userKey, JSON.stringify(existingUserOrders));
+      } catch (e) {
+        console.warn('Failed to write user-specific order cache', e);
+      }
+
+      // Debug log for developer visibility
+      console.debug('Saved order locally', { newOrder, globalCount: allOrders.length });
 
       return newOrder;
     } catch (err) {
@@ -229,12 +249,29 @@ export const AuthProvider = ({ children }) => {
         id: Date.now().toString(),
         userId: user.id,
         email: user.email,
+        customerEmail: user.email,
+        phone: orderData.metadata?.phone || user.phone || '',
+        deliveryAddress: orderData.metadata?.deliveryAddress || orderData.metadata?.delivery_address || '',
+        paymentMethod: orderData.metadata?.paymentMethod || orderData.metadata?.payment_method || '',
+        deliveryMethod: orderData.metadata?.deliveryMethod || orderData.metadata?.delivery_method || '',
+        notes: orderData.metadata?.notes || '',
         createdAt: timestamp,
       };
 
       allOrders.push(newOrder);
       localStorage.setItem('simple-dough-orders', JSON.stringify(allOrders));
+      // Also write a user-specific key
+      try {
+        const userKey = `simple-dough-orders-${user.email}`;
+        const existingUserOrders = JSON.parse(localStorage.getItem(userKey) || '[]');
+        existingUserOrders.push(newOrder);
+        localStorage.setItem(userKey, JSON.stringify(existingUserOrders));
+      } catch (e) {
+        console.warn('Failed to write user-specific order cache (fallback)', e);
+      }
       setOrderHistory((prev) => [...prev, newOrder]);
+
+      console.debug('Saved order to local fallback', { newOrder, globalCount: allOrders.length });
 
       return newOrder;
     }

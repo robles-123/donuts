@@ -103,25 +103,57 @@ const CheckoutSuccess = ({ order, onClose }) => {
               <Clock className="w-5 h-5 text-amber-600" />
               Order Status
             </h3>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-medium text-green-700">Order Received</span>
-              </div>
-              <div className="flex-1 h-0.5 bg-gray-300"></div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-gray-300 rounded-full"></div>
-                <span className="text-sm text-gray-500">Preparing</span>
-              </div>
-              <div className="flex-1 h-0.5 bg-gray-300"></div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-gray-300 rounded-full"></div>
-                <span className="text-sm text-gray-500">Ready</span>
-              </div>
-            </div>
-            <p className="text-sm text-amber-700 mt-3">
-              We'll notify you when your delicious donuts are ready!
-            </p>
+            {/** Render a timeline based on order.status */}
+            {(() => {
+              const steps = [
+                { key: 'received', label: 'Order Received' },
+                { key: 'confirmed', label: 'Confirmed' },
+                { key: 'preparing', label: 'Preparing' },
+                { key: 'out_for_delivery', label: 'Out for Delivery' },
+                { key: 'ready', label: 'Ready' },
+                { key: 'delivered', label: 'Delivered' }
+              ];
+
+              // normalize incoming status values to one of the keys above when possible
+              const normalize = (s) => {
+                if (!s) return 'received';
+                const map = {
+                  pending: 'received',
+                  received: 'received',
+                  confirmed: 'confirmed',
+                  preparing: 'preparing',
+                  ready: 'ready',
+                  out_for_delivery: 'out_for_delivery',
+                  outfordelivery: 'out_for_delivery',
+                  delivered: 'delivered',
+                  cancelled: 'cancelled'
+                };
+                return map[s] || s;
+              };
+
+              const current = normalize(order.status);
+              const currentIndex = steps.findIndex(s => s.key === current);
+
+              return (
+                <div>
+                  <div className="flex items-center gap-4">
+                    {steps.map((s, i) => {
+                      const active = currentIndex >= i && currentIndex !== -1;
+                      return (
+                        <React.Fragment key={s.key}>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-3 h-3 rounded-full ${active ? 'bg-green-500' : 'bg-gray-300'} ${active ? 'animate-pulse' : ''}`}></div>
+                            <span className={`text-sm font-medium ${active ? 'text-green-700' : 'text-gray-500'}`}>{s.label}</span>
+                          </div>
+                          {i < steps.length - 1 && <div className="flex-1 h-0.5 bg-gray-300"></div>}
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                  <p className="text-sm text-amber-700 mt-3">We'll notify you when your delicious donuts are ready!</p>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Delivery Information */}
@@ -198,7 +230,7 @@ const CheckoutSuccess = ({ order, onClose }) => {
               </div>
               <div className="flex justify-between items-center text-sm text-gray-600 mt-1">
                 <span>Payment Method:</span>
-                <span>{order.paymentMethod.toUpperCase()}</span>
+                <span>{order.paymentMethod ? order.paymentMethod.toUpperCase() : 'N/A'}</span>
               </div>
             </div>
           </div>
