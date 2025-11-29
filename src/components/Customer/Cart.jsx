@@ -49,6 +49,12 @@ const Cart = () => {
     }
   };
 
+  // detect any items with insufficient stock
+  const itemsWithIssues = cartItems.filter(item => {
+    const availableStock = getProductStock(item.product.id);
+    return availableStock <= 0 || (item.quantity > availableStock);
+  });
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       {/* Header */}
@@ -68,6 +74,17 @@ const Cart = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Cart Items */}
         <div className="lg:col-span-2 space-y-4">
+          {/* Global warning if any items are out of stock or exceed current stock */}
+          {itemsWithIssues.length > 0 && (
+            <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg mb-4">
+              <strong>Stock issue:</strong> Some items in your cart are out of stock or the requested quantity is no longer available. Please adjust quantities or remove the item(s) before checking out.
+              <ul className="mt-2 list-disc list-inside text-sm">
+                {itemsWithIssues.map(it => (
+                  <li key={it.id}>{it.product?.name} — available: {getProductStock(it.product.id)}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           {cartItems.map(item => {
             const customizations = item.customizations || {};
             const quantity = item.quantity || 1;
@@ -89,6 +106,14 @@ const Cart = () => {
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">
                       {item.product?.name}
                     </h3>
+
+                    {/* Item-level stock warning */}
+                    {getProductStock(item.product.id) <= 0 && (
+                      <div className="text-sm text-red-600 font-medium mb-1">Out of stock</div>
+                    )}
+                    {item.quantity > getProductStock(item.product.id) && getProductStock(item.product.id) > 0 && (
+                      <div className="text-sm text-orange-600 font-medium mb-1">Only {getProductStock(item.product.id)} left — reduce quantity</div>
+                    )}
 
                     {/* Customizations */}
                     {customizations.flavors && customizations.flavors.length > 0 && (
@@ -167,9 +192,10 @@ const Cart = () => {
 
             <button
               onClick={() => setShowCheckout(true)}
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-4 rounded-lg font-semibold hover:from-amber-600 hover:to-orange-600 transition-all transform hover:scale-105"
+              disabled={itemsWithIssues.length > 0}
+              className={`w-full py-4 rounded-lg font-semibold transition-all transform hover:scale-105 ${itemsWithIssues.length > 0 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600'}`}
             >
-              Proceed to Checkout
+              {itemsWithIssues.length > 0 ? 'Resolve Stock Issues' : 'Proceed to Checkout'}
             </button>
 
             <Link

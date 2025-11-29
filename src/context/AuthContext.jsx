@@ -113,16 +113,21 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     const { name, email, phone, address, password } = userData;
 
-    const options = {
-      data: {
-        name,
-        phone,
-        address,
-        role: 'customer',
-      },
+    // Build user metadata to store in Supabase
+    const userMeta = {
+      name,
+      phone,
+      address,
+      role: 'customer',
     };
 
-    const { data, error } = await supabase.auth.signUp({ email, password }, options);
+    // Use the v2 signUp payload shape: pass all params in a single object
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: userMeta },
+    });
+
     if (error) throw error;
 
     const sessionUser = data?.user ?? null;

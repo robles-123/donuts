@@ -19,8 +19,9 @@ const Login = () => {
     (async () => {
       try {
         // ✅ Use AuthContext login function
+        // normalize email (trim + lowercase) to avoid accidental whitespace/case issues
         await login({
-          email: formData.email,
+          email: String(formData.email || '').trim().toLowerCase(),
           password: formData.password,
         });
 

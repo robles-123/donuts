@@ -2,9 +2,56 @@ import React, { useState, useEffect } from 'react';
 import { Package, AlertTriangle, TrendingUp, Edit3, Save, X, Plus, Minus } from 'lucide-react';
 import { useInventory } from '../../context/InventoryContext';
 import { PRODUCTS } from '../../data/products';
+import { supabase } from '../../lib/supabaseClient';
 
 const InventoryManagement = () => {
   const { inventory, updateDailyLimit, getLowStockProducts, revertStock  } = useInventory();
+  const [soldTodayFromOrders, setSoldTodayFromOrders] = useState({});
+
+  // Fetch delivered orders from today and count items sold
+  useEffect(() => {
+    const fetchSoldToday = async () => {
+      try {
+        // Get today's date range
+        const today = new Date();
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
+        // Fetch all delivered orders from today
+        const { data: orders, error } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('status', 'delivered')
+          .gte('created_at', todayStart.toISOString())
+          .lt('created_at', todayEnd.toISOString());
+
+        if (!error && orders) {
+          // Count sold quantity per product
+          const soldCount = {};
+          orders.forEach(order => {
+            const items = order.items || order.metadata?.items || [];
+            items.forEach(item => {
+              const productId = item.product?.id || item.product_id;
+              soldCount[productId] = (soldCount[productId] || 0) + (item.quantity || 1);
+            });
+          });
+          setSoldTodayFromOrders(soldCount);
+          return;
+        }
+      } catch (err) {
+        console.warn('Failed to fetch sold items from Supabase, using local counts', err);
+      }
+
+      // Fallback: use local inventory counts
+      const localCounts = {};
+      Object.entries(inventory).forEach(([productId, data]) => {
+        localCounts[productId] = data.soldToday || 0;
+      });
+      setSoldTodayFromOrders(localCounts);
+    };
+
+    fetchSoldToday();
+  }, [inventory]);
 
   // Helper to revert multiple items at once
 const revertMultipleItems = (items) => {
@@ -193,7 +240,7 @@ const revertMultipleItems = (items) => {
 
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium text-gray-700">Sold Today:</span>
-                    <span className="text-sm text-gray-600">{stock?.soldToday || 0}</span>
+                    <span className="text-sm text-gray-600">{soldTodayFromOrders[product.id] || 0}</span>
                   </div>
 
                   <div className="flex justify-between items-center">
