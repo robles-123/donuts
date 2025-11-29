@@ -28,14 +28,28 @@ const OrderHistory = () => {
         .order('created_at', { ascending: false });
 
       if (!error && data) {
-        const processed = data.map(order => ({
-          ...order,
-          id: order.id,
-          createdAt: order.created_at || order.createdAt,
-          total: order.total || order.metadata?.total || 0,
-          items: order.items || order.metadata?.items || [],
-          customerEmail: order.email || order.customerEmail,
-        }));
+        const normalizeStatus = (s) => {
+          if (!s && s !== 0) return '';
+          try {
+            return String(s).trim().toLowerCase().replace(/\s+/g, '_');
+          } catch (e) {
+            return '';
+          }
+        };
+
+        const processed = data.map(order => {
+          const rawStatus = order.status || order.metadata?.status || '';
+          const status = normalizeStatus(rawStatus);
+          return {
+            ...order,
+            id: order.id,
+            createdAt: order.created_at || order.createdAt,
+            total: order.total || order.metadata?.total || 0,
+            items: order.items || order.metadata?.items || [],
+            customerEmail: order.email || order.customerEmail,
+            status,
+          };
+        });
 
         // Mark cancelled-by-admin if status is cancelled
         processed.forEach(o => { if (o.status === 'cancelled') o.cancelledBy = 'admin'; });
@@ -63,8 +77,14 @@ const OrderHistory = () => {
       (o) => (o.customerEmail === user.email || o.email === user.email) && !cancelledByUser.includes(o.id)
     );
 
-    // Tag orders cancelled by admin
+    // Normalize statuses and tag orders cancelled by admin
+    const normalizeStatus = (s) => {
+      if (!s && s !== 0) return '';
+      try { return String(s).trim().toLowerCase().replace(/\s+/g, '_'); } catch (e) { return ''; }
+    };
+
     userOrders.forEach(o => {
+      o.status = normalizeStatus(o.status || o.metadata?.status || '');
       if (o.status === 'cancelled' && !cancelledByUser.includes(o.id)) {
         o.cancelledBy = 'admin';
       }
