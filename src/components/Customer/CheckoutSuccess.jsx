@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle, Package, Clock, MapPin, Phone, Download, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { generateReceiptPDF } from '../../lib/receipt';
 
 const CheckoutSuccess = ({ order, onClose }) => {
   const [showConfetti, setShowConfetti] = useState(true);
@@ -12,29 +13,37 @@ const CheckoutSuccess = ({ order, onClose }) => {
   }, []);
 
   const downloadReceipt = () => {
-    const receiptData = {
-      orderNumber: order.id.slice(-8),
-      date: new Date(order.createdAt).toLocaleString(),
-      items: order.items,
-      total: order.total,
-      paymentMethod: order.paymentMethod,
-      deliveryMethod: order.deliveryMethod,
-      customerInfo: {
-        phone: order.phone,
-        address: order.deliveryAddress
-      }
-    };
+    try {
+      generateReceiptPDF(order);
+    } catch (err) {
+      console.error('Failed to generate receipt PDF', err);
+      // fallback to JSON download if PDF generation fails
+      const receiptData = {
+        orderNumber: order.id.slice(-8),
+        date: new Date(order.createdAt).toLocaleString(),
+        items: order.items,
+        total: order.total,
+        paymentMethod: order.paymentMethod,
+        deliveryMethod: order.deliveryMethod,
+        customerInfo: {
+          phone: order.phone,
+          address: order.deliveryAddress
+        }
+      };
 
-    const blob = new Blob([JSON.stringify(receiptData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `simple-dough-receipt-${order.id.slice(-8)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+      const blob = new Blob([JSON.stringify(receiptData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `simple-dough-receipt-${order.id.slice(-8)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
   };
+
+  const canDownload = (order?.status || '').toString().toLowerCase() === 'delivered';
 
   // ✅ Save order globally (in case CheckoutSuccess is mounted independently)
   useEffect(() => {
@@ -245,13 +254,24 @@ const CheckoutSuccess = ({ order, onClose }) => {
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-4">
-            <button
-              onClick={downloadReceipt}
-              className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition-all transform hover:scale-105 flex items-center justify-center gap-2"
-            >
-              <Download className="w-5 h-5" />
-              Download Receipt
-            </button>
+            {canDownload ? (
+              <button
+                onClick={downloadReceipt}
+                className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition-all transform hover:scale-105 flex items-center justify-center gap-2"
+              >
+                <Download className="w-5 h-5" />
+                Download Receipt
+              </button>
+            ) : (
+              <button
+                disabled
+                title="Receipt will be available after your order is marked as delivered"
+                className="flex-1 bg-gray-200 text-gray-500 py-3 px-6 rounded-lg font-semibold cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <Download className="w-5 h-5" />
+                Receipt (available after delivery)
+              </button>
+            )}
             <Link
               to="/menu"
               className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3 px-6 rounded-lg font-semibold hover:from-amber-600 hover:to-orange-600 transition-all transform hover:scale-105 flex items-center justify-center gap-2"

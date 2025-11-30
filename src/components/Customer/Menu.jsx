@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PRODUCTS } from '../../data/products';
 import ProductCard from './ProductCard';
 import { Filter, Search } from 'lucide-react';
+import { useInventory } from '../../context/InventoryContext';
 
 const Menu = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const { inventory } = useInventory(); // Subscribe to inventory changes
 
   const categories = [
     { id: 'all', name: 'All Items', emoji: '🍩' },

@@ -39,6 +39,44 @@ export const InventoryProvider = ({ children }) => {
     }
   }, [inventory]);
 
+  // Listen for storage changes from other tabs/windows or admin updates
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'simple-dough-inventory' && e.newValue) {
+        try {
+          const updated = JSON.parse(e.newValue);
+          setInventory(updated);
+        } catch (err) {
+          console.error('Failed to parse inventory update', err);
+        }
+      }
+    };
+
+    // Add storage listener for cross-tab updates
+    window.addEventListener('storage', handleStorageChange);
+
+    // Also poll localStorage periodically to catch same-tab updates (admin and customer on same tab)
+    const pollInterval = setInterval(() => {
+      const savedInventory = localStorage.getItem('simple-dough-inventory');
+      if (savedInventory && savedInventory !== "{}") {
+        try {
+          const parsed = JSON.parse(savedInventory);
+          // Only update if different from current state
+          if (JSON.stringify(parsed) !== JSON.stringify(inventory)) {
+            setInventory(parsed);
+          }
+        } catch (err) {
+          console.error('Failed to parse inventory from localStorage', err);
+        }
+      }
+    }, 500); // Poll every 500ms for real-time updates
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(pollInterval);
+    };
+  }, [inventory]);
+
   const updateDailyLimit = (productId, limit) => {
     setInventory(prev => ({
       ...prev,

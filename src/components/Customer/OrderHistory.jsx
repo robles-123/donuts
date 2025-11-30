@@ -1,16 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { useInventory } from "../../context/InventoryContext";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Package, Calendar, XCircle } from "lucide-react";
+import { ArrowLeft, Package, Calendar, XCircle, Download } from "lucide-react";
 import { supabase } from '../../lib/supabaseClient';
+import { generateReceiptPDF } from '../../lib/receipt';
 
 const OrderHistory = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
-
-  const { revertStock } = useInventory();
 
   const getUserCancelKey = () => {
     return user?.email ? `simple-dough-orders-${user.email}` : "simple-dough-orders-guest";
@@ -129,9 +127,6 @@ const OrderHistory = () => {
     if (index !== -1) {
       globalOrders[index].status = "cancelled";
       localStorage.setItem("simple-dough-orders", JSON.stringify(globalOrders));
-      
-      const order = globalOrders[index];
-      order.items.forEach(item => revertStock(item.product.id, item.quantity));
     }
 
     fetchOrders();
@@ -329,6 +324,30 @@ const OrderHistory = () => {
                       className="flex items-center gap-1 bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-medium hover:bg-red-200 transition-all"
                     >
                       <XCircle className="w-4 h-4" /> Cancel
+                    </button>
+                  )}
+                  {/* Download receipt button — only available after delivery */}
+                  {order.status === 'delivered' ? (
+                    <button
+                      onClick={() => {
+                        try {
+                          generateReceiptPDF(order);
+                        } catch (err) {
+                          console.error('Failed to generate receipt', err);
+                          alert('Failed to generate receipt. See console for details.');
+                        }
+                      }}
+                      className="flex items-center gap-1 bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium hover:bg-blue-200 transition-all"
+                    >
+                      <Download className="w-4 h-4" /> Receipt
+                    </button>
+                  ) : (
+                    <button
+                      disabled
+                      title="Receipt will be available after this order is marked as delivered"
+                      className="flex items-center gap-1 bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-sm font-medium cursor-not-allowed"
+                    >
+                      <Download className="w-4 h-4" /> Receipt
                     </button>
                   )}
                 </div>
