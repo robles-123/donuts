@@ -5,7 +5,7 @@ import { PRODUCTS } from '../../data/products';
 import { supabase } from '../../lib/supabaseClient';
 
 const InventoryManagement = () => {
-  const { inventory, updateDailyLimit, getLowStockProducts, revertStock  } = useInventory();
+  const { inventory, updateDailyLimit, adjustStock, getLowStockProducts, revertStock  } = useInventory();
   const [soldTodayFromOrders, setSoldTodayFromOrders] = useState({});
 
   // Fetch delivered orders from today and count items sold
@@ -294,14 +294,14 @@ const revertMultipleItems = (items) => {
 
                 <div className="flex gap-2">
                   <button
-                    onClick={() => updateDailyLimit(product.id, (stock?.dailyLimit || 0) + 10)}
+                    onClick={() => adjustStock(product.id, 10)}
                     className="flex-1 bg-green-100 text-green-700 py-2 px-3 rounded-lg hover:bg-green-200 transition-colors text-sm font-medium"
                   >
                     <Plus className="w-4 h-4 inline mr-1" />
                     +10
                   </button>
                   <button
-                    onClick={() => updateDailyLimit(product.id, Math.max(0, (stock?.dailyLimit || 0) - 10))}
+                    onClick={() => adjustStock(product.id, -10)}
                     className="flex-1 bg-red-100 text-red-700 py-2 px-3 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
                   >
                     <Minus className="w-4 h-4 inline mr-1" />

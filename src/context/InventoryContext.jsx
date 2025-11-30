@@ -88,6 +88,21 @@ export const InventoryProvider = ({ children }) => {
     }));
   };
 
+  // Adjust current stock by a delta (positive to add, negative to deduct)
+  const adjustStock = (productId, delta) => {
+    setInventory(prev => {
+      const item = prev[productId] || { dailyLimit: 0, currentStock: 0, soldToday: 0 };
+      const newStock = Math.max(0, Math.min(item.dailyLimit, (item.currentStock || 0) + delta));
+      return {
+        ...prev,
+        [productId]: {
+          ...item,
+          currentStock: newStock
+        }
+      };
+    });
+  };
+
   const recordSale = (productId, quantity) => {
     setInventory(prev => {
       const prevStock = prev[productId]?.currentStock || 0;
@@ -138,6 +153,7 @@ export const InventoryProvider = ({ children }) => {
   const value = {
     inventory,
     updateDailyLimit,
+    adjustStock,
     recordSale,
     revertStock, 
     // resetDailyInventory removed
